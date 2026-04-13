@@ -1,18 +1,38 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import declarative_base
+import os
 
-from app.config import DATABASE_URL
-
-# Подключаемся к PostgreSQL
-engine = create_async_engine(DATABASE_URL, echo=True)
-
-# Фабрика сессий
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession)
-
-# Базовый класс для таблиц
+# Создание базового класса для моделей
 Base = declarative_base()
 
-# Функция для получения сессии БД
+# Настройка подключения к PostgreSQL из переменной окружения
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@postgres:5432/fastapi_db"  # Значение по умолчанию
+)
+# DATABASE_URL = os.getenv(
+#     "DATABASE_URL",
+#     "postgresql+asyncpg://127.0.0.1:postgres@postgres:5433/fastapi_db"  # Значение по умолчанию
+# )
+# Создание engine (только один раз!)
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,  # Выводить SQL-запросы (полезно для отладки)
+    pool_size=5,
+    max_overflow=10
+)
+
+# Фабрика асинхронных сессий
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+# Асинхронная функция для получения сессии
 async def get_db():
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.close()

@@ -9,9 +9,12 @@ services:
     depends_on:
       - postgres
     environment:
-#      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/fastapi_db
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/fastapi_db
       - LOG_LEVEL=INFO
-    entrypoint: ["python", "-um", "app.main"]
+    networks:
+      - app_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
 
   postgres:
     image: postgres:16-alpine
@@ -24,6 +27,13 @@ services:
      - "5433:5432"
     volumes:
      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network  # ⬅️ Добавить сеть
+
+
+networks:
+  app_network: # ⬅️ Определить сеть
+      driver: bridge
 
 volumes:
   postgres_data:

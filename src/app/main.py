@@ -1,32 +1,19 @@
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
 import uvicorn
-
-from app.database import engine, Base
+from fastapi import FastAPI
+from app.database import Base, engine
 from app.routers import users
+import app.models
+import asyncio
+from app.routers import users, admin
 
 
-# Создаём таблицы при запуске
+app = FastAPI(title="Мой проект на фастапи!")
 
 
-app = FastAPI()
-
-# Подключаем роутеры
 app.include_router(users.router)
-
-# Простая проверка
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+app.include_router(admin.router)
 
 
-@app.get("/users")
-async def get_users():
-    return [{"id": 1, "name": "Vladimir"}, {"id": 2, "name": "Stanislav"}]
 
 
 # ========== ЗАПУСК СЕРВЕРА ==========
