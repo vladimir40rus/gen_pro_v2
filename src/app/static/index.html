@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Tester - Блог платформа</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+        }
+
+        .api-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .api-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .api-card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+
+        .method {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .method.get { background: #4CAF50; color: white; }
+        .method.post { background: #2196F3; color: white; }
+        .method.put { background: #FF9800; color: white; }
+        .method.delete { background: #f44336; color: white; }
+
+        .endpoint {
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin: 10px 0;
+            color: #666;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 8px 12px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        textarea {
+            resize: vertical;
+            font-family: monospace;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        .response {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+
+        .status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .status.success { color: #4CAF50; }
+        .status.error { color: #f44336; }
+
+        .url-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .url-bar span {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .base-url {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 6px;
+        }
+
+        @media (max-width: 768px) {
+            .api-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📡 API Tester</h1>
+
+        <div class="url-bar">
+            <span>🌐 Base URL:</span>
+            <input type="text" id="baseUrl" value="http://localhost:8002" class="base-url" style="width: 300px;">
+        </div>
+
+        <div class="api-grid">
+            <!-- Users -->
+            <div class="api-card">
+                <h2>👤 Users API</h2>
+
+                <div class="method post">POST</div>
+                <div class="endpoint">/users/</div>
+                <input type="text" id="userUsername" placeholder="username" value="testuser">
+                <input type="email" id="userEmail" placeholder="email" value="test@example.com">
+                <input type="text" id="userPassword" placeholder="password" value="12345678">
+                <button onclick="callAPI('POST', '/users/', {
+                    username: document.getElementById('userUsername').value,
+                    email: document.getElementById('userEmail').value,
+                    password: document.getElementById('userPassword').value
+                }, 'userResponse')">Создать пользователя</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/users/me</div>
+                <button onclick="callAPI('GET', '/users/me', null, 'userResponse')">Получить меня</button>
+
+                <div class="method put">PUT</div>
+                <div class="endpoint">/users/</div>
+                <input type="text" id="updateBio" placeholder="bio" value="Software developer">
+                <button onclick="callAPI('PUT', '/users/', {
+                    bio: document.getElementById('updateBio').value
+                }, 'userResponse')">Обновить профиль</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/users/stats/{username}</div>
+                <input type="text" id="statsUsername" placeholder="username" value="testuser">
+                <button onclick="callAPI('GET', `/users/stats/${document.getElementById('statsUsername').value}`, null, 'userResponse')">Статистика</button>
+
+                <div class="method delete">DELETE</div>
+                <div class="endpoint">/users/</div>
+                <button onclick="if(confirm('Удалить текущего пользователя?')) callAPI('DELETE', '/users/', null, 'userResponse')">Удалить меня</button>
+
+                <div id="userResponse" class="response">Ответ будет здесь...</div>
+            </div>
+
+            <!-- Articles -->
+            <div class="api-card">
+                <h2>📝 Articles API</h2>
+
+                <div class="method post">POST</div>
+                <div class="endpoint">/articles/</div>
+                <input type="text" id="articleTitle" placeholder="title" value="My First Article">
+                <textarea id="articleBody" placeholder="body" rows="3">This is the content of my first article. It's very interesting!</textarea>
+                <input type="text" id="articleSlug" placeholder="slug" value="my-first-article">
+                <button onclick="callAPI('POST', '/articles/', {
+                    title: document.getElementById('articleTitle').value,
+                    body: document.getElementById('articleBody').value,
+                    slug: document.getElementById('articleSlug').value
+                }, 'articleResponse')">Создать статью</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/articles/</div>
+                <button onclick="callAPI('GET', '/articles/', null, 'articleResponse')">Все статьи</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/articles/{slug}</div>
+                <input type="text" id="getSlug" placeholder="slug" value="my-first-article">
+                <button onclick="callAPI('GET', `/articles/${document.getElementById('getSlug').value}`, null, 'articleResponse')">Найти статью</button>
+
+                <div class="method put">PUT</div>
+                <div class="endpoint">/articles/{slug}</div>
+                <input type="text" id="updateSlug" placeholder="slug" value="my-first-article">
+                <input type="text" id="newTitle" placeholder="новый title">
+                <button onclick="callAPI('PUT', `/articles/${document.getElementById('updateSlug').value}`, {
+                    title: document.getElementById('newTitle').value
+                }, 'articleResponse')">Обновить</button>
+
+                <div class="method delete">DELETE</div>
+                <div class="endpoint">/articles/{slug}</div>
+                <input type="text" id="deleteSlug" placeholder="slug" value="my-first-article">
+                <button onclick="if(confirm('Удалить статью?')) callAPI('DELETE', `/articles/${document.getElementById('deleteSlug').value}`, null, 'articleResponse')">Удалить</button>
+
+                <div id="articleResponse" class="response">Ответ будет здесь...</div>
+            </div>
+
+            <!-- Comments -->
+            <div class="api-card">
+                <h2>💬 Comments API</h2>
+
+                <div class="method post">POST</div>
+                <div class="endpoint">/comments/</div>
+                <textarea id="commentBody" placeholder="comment body" rows="2">Great article! Very helpful.</textarea>
+                <button onclick="callAPI('POST', '/comments/', {
+                    body: document.getElementById('commentBody').value
+                }, 'commentResponse')">Создать комментарий</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/comments/article/{article_id}</div>
+                <input type="number" id="articleId" placeholder="article_id" value="1">
+                <button onclick="callAPI('GET', `/comments/article/${document.getElementById('articleId').value}`, null, 'commentResponse')">Комментарии статьи</button>
+
+                <div class="method delete">DELETE</div>
+                <div class="endpoint">/comments/{comment_id}</div>
+                <input type="number" id="commentId" placeholder="comment_id">
+                <button onclick="if(confirm('Удалить комментарий?')) callAPI('DELETE', `/comments/${document.getElementById('commentId').value}`, null, 'commentResponse')">Удалить</button>
+
+                <div id="commentResponse" class="response">Ответ будет здесь...</div>
+            </div>
+
+            <!-- Tags & Favorites & Followers -->
+            <div class="api-card">
+                <h2>🏷️ Tags & ❤️ Favorites & 👥 Followers</h2>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/tags/</div>
+                <button onclick="callAPI('GET', '/tags/', null, 'miscResponse')">Все теги</button>
+
+                <hr style="margin: 15px 0;">
+
+                <div class="method post">POST</div>
+                <div class="endpoint">/favorites/?user_id=X&article_id=Y</div>
+                <input type="number" id="favUserId" placeholder="user_id" value="1">
+                <input type="number" id="favArticleId" placeholder="article_id" value="1">
+                <button onclick="callAPI('POST', `/favorites/?user_id=${document.getElementById('favUserId').value}&article_id=${document.getElementById('favArticleId').value}`, null, 'miscResponse')">В избранное</button>
+
+                <div class="method delete">DELETE</div>
+                <div class="endpoint">/favorites/?user_id=X&article_id=Y</div>
+                <input type="number" id="unfavUserId" placeholder="user_id" value="1">
+                <input type="number" id="unfavArticleId" placeholder="article_id" value="1">
+                <button onclick="callAPI('DELETE', `/favorites/?user_id=${document.getElementById('unfavUserId').value}&article_id=${document.getElementById('unfavArticleId').value}`, null, 'miscResponse')">Из избранного</button>
+
+                <hr style="margin: 15px 0;">
+
+                <div class="method post">POST</div>
+                <div class="endpoint">/followers/?follower_id=X&following_id=Y</div>
+                <input type="number" id="followerId" placeholder="follower_id" value="1">
+                <input type="number" id="followingId" placeholder="following_id" value="2">
+                <button onclick="callAPI('POST', `/followers/?follower_id=${document.getElementById('followerId').value}&following_id=${document.getElementById('followingId').value}`, null, 'miscResponse')">Подписаться</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/followers/followers/{user_id}</div>
+                <input type="number" id="followersUserId" placeholder="user_id" value="1">
+                <button onclick="callAPI('GET', `/followers/followers/${document.getElementById('followersUserId').value}`, null, 'miscResponse')">Подписчики</button>
+
+                <div class="method get">GET</div>
+                <div class="endpoint">/followers/following/{user_id}</div>
+                <input type="number" id="followingUserId" placeholder="user_id" value="1">
+                <button onclick="callAPI('GET', `/followers/following/${document.getElementById('followingUserId').value}`, null, 'miscResponse')">Подписки</button>
+
+                <div id="miscResponse" class="response">Ответ будет здесь...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function callAPI(method, endpoint, body, responseElementId) {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const url = baseUrl + endpoint;
+            const responseDiv = document.getElementById(responseElementId);
+
+            responseDiv.innerHTML = '⏳ Загрузка...';
+            responseDiv.style.color = '#666';
+
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+
+            if (body && (method === 'POST' || method === 'PUT')) {
+                options.body = JSON.stringify(body);
+            }
+
+            try {
+                const startTime = Date.now();
+                const response = await fetch(url, options);
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+
+                let data;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    data = await response.text();
+                }
+
+                const statusClass = response.ok ? 'success' : 'error';
+                responseDiv.innerHTML = `
+                    <div class="status ${statusClass}">
+                        ${response.status} ${response.statusText} (${duration}ms)
+                    </div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                responseDiv.style.color = 'inherit';
+
+                if (!response.ok) {
+                    console.error('API Error:', data);
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Ошибка: ${error.message}
+                    </div>
+                    <div>Проверьте, запущен ли сервер на ${baseUrl}</div>
+                `;
+                responseDiv.style.color = 'inherit';
+                console.error('Fetch error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

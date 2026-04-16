@@ -56,3 +56,36 @@ async def remove_from_favorites(
     await db.commit()
     return {"message": "Article removed from favorites"}
 
+
+@router.get("/{user_id}", response_model=List[ArticleResponse], summary="Получить избранные статьи пользователя")
+async def get_user_favorites(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Получить все избранные статьи пользователя"""
+    from app.models import Article, User
+    from app.schemas.article import ArticleResponse
+
+    query = (
+        select(Article)
+        .join(Favorite, Article.id == Favorite.article_id)
+        .where(Favorite.user_id == user_id)
+    )
+    result = await db.execute(query)
+    articles = result.scalars().all()
+
+    response = []
+    for article in articles:
+        author = await db.get(User, article.author_id)
+        response.append(ArticleResponse(
+            id=article.id,
+            title=article.title,
+            description=article.description,
+            body=article.body,
+            slug=article.slug,
+            author=author,
+            tags=[],
+            favorited=True,
+            favorites_count=0,
+            comments_count=0,
+            created_at=article.created_at,
+            updated_at=article.updated_at
+        ))
+    return response

@@ -9,6 +9,27 @@ from app.schemas.user import UserResponse
 
 router = APIRouter(prefix="/followers", tags=["Followers"])
 
+@router.get("/following/{user_id}", response_model=List[UserResponse], summary="Получить подписки пользователя")
+async def get_following(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Получить подписки пользователя"""
+    query = (
+        select(User)
+        .join(Follower, User.id == Follower.following_id)
+        .where(Follower.follower_id == user_id)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
+@router.get("/followers/{user_id}", response_model=List[UserResponse],summary="Получить подписчиков пользователя")
+async def get_followers(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Получить подписчиков пользователя"""
+    query = (
+        select(User)
+        .join(Follower, User.id == Follower.follower_id)
+        .where(Follower.following_id == user_id)
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
 
 @router.post("/", summary="Подписаться на пользователя")
 async def follow_user(
@@ -48,6 +69,10 @@ async def unfollow_user(
         following_id: int,
         db: AsyncSession = Depends(get_db)
 ):
+    follower = await db.get(User, follower_id)
+    following = await db.get(User, following_id)
+    if not follower or not following:
+        raise HTTPException(404, "User not found")
     """Отписаться от пользователя"""
     result = await db.execute(
         select(Follower).where(
@@ -65,14 +90,4 @@ async def unfollow_user(
     return {"message": f"User {follower_id} unfollowed {following_id}"}
 
 
-@router.get("/followers/{user_id}", response_model=List[UserResponse],summary="Получить подписчиков пользователя")
-async def get_followers(user_id: int, db: AsyncSession = Depends(get_db)):
-    """Получить подписчиков пользователя"""
-    query = (
-        select(User)
-        .join(Follower, User.id == Follower.follower_id)
-        .where(Follower.following_id == user_id)
-    )
-    result = await db.execute(query)
-    return result.scalars().all()
 

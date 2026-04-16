@@ -31,7 +31,9 @@ async def get_current_user(db: AsyncSession = Depends(get_db)):
 
     return user
 
-
+@router.get("/", response_model=UserResponse, summary="Получить текущего пользователя")
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    return current_user
 @router.post("/", response_model=UserResponse, summary="Регистрация нового пользователя")
 async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Создать нового пользователя"""
@@ -56,60 +58,6 @@ async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db))
     await db.commit()
     await db.refresh(user)
     return user
-
-
-
-
-@router.put("/", response_model=UserResponse, summary="Обновление профиля")
-async def update_user(
-        user_data: UserUpdate,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
-    """Обновить текущего пользователя (первого в БД)"""
-
-    # Обновляем только переданные поля
-    if user_data.username is not None:
-        if user_data.username != current_user.username:
-            existing = await db.execute(
-                select(User).where(User.username == user_data.username)
-            )
-            if existing.scalar_one_or_none():
-                raise HTTPException(400, "Username already exists")
-            current_user.username = user_data.username
-
-    if user_data.email is not None:
-        if user_data.email != current_user.email:
-            existing = await db.execute(
-                select(User).where(User.email == user_data.email)
-            )
-            if existing.scalar_one_or_none():
-                raise HTTPException(400, "Email already exists")
-            current_user.email = user_data.email
-
-    if user_data.password is not None:
-        current_user.password_hash = user_data.password
-
-    if user_data.bio is not None:
-        current_user.bio = user_data.bio
-
-    if user_data.image is not None:
-        current_user.image_url = user_data.image
-
-    await db.commit()
-    await db.refresh(current_user)
-    return current_user
-
-
-@router.delete("/", status_code=status.HTTP_204_NO_CONTENT, summary="Удаление текущего пользователя")
-async def delete_current_user(
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
-    """Удалить текущего пользователя (первого в БД)"""
-    await db.delete(current_user)
-    await db.commit()
-
 
 
 @router.get("/stats/{username}", response_model=UserStats, summary="Получить статистику пользователя")
@@ -173,6 +121,57 @@ async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
         total_likes_received=total_likes_received
     )
 
-@router.get("/", response_model=UserResponse, summary="Получить текущего пользователя")
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
+
+@router.put("/", response_model=UserResponse, summary="Обновление профиля")
+async def update_user(
+        user_data: UserUpdate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """Обновить текущего пользователя (первого в БД)"""
+
+    # Обновляем только переданные поля
+    if user_data.username is not None:
+        if user_data.username != current_user.username:
+            existing = await db.execute(
+                select(User).where(User.username == user_data.username)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(400, "Username already exists")
+            current_user.username = user_data.username
+
+    if user_data.email is not None:
+        if user_data.email != current_user.email:
+            existing = await db.execute(
+                select(User).where(User.email == user_data.email)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(400, "Email already exists")
+            current_user.email = user_data.email
+
+    if user_data.password is not None:
+        current_user.password_hash = user_data.password
+
+    if user_data.bio is not None:
+        current_user.bio = user_data.bio
+
+    if user_data.image is not None:
+        current_user.image_url = user_data.image
+
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
+
+
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT, summary="Удаление текущего пользователя")
+async def delete_current_user(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """Удалить текущего пользователя (первого в БД)"""
+    await db.delete(current_user)
+    await db.commit()
+
+
+
+
