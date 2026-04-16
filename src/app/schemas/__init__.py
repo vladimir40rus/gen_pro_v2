@@ -1,0 +1,16 @@
+from app.schemas.user import UserBase, UserCreate, UserResponse, UserUpdate
+from app.schemas.article import ArticleBase, ArticleCreate, ArticleUpdate, ArticleResponse
+from app.schemas.comment import CommentBase, CommentCreate, CommentResponse, CommentUpdate
+from app.schemas.tag import TagBase, TagCreate, TagResponse
+
+# Для обратной совместимости с существующими импортами
+__all__ = [
+    "UserBase",
+    "UserCreate",
+    "UserResponse",
+    "UserUpdate",
+    "ArticleBase",
+    "ArticleCreate",
+    "ArticleUpdate",
+    "ArticleResponse",
+]

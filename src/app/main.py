@@ -1,19 +1,18 @@
 import uvicorn
 from fastapi import FastAPI
-from app.database import Base, engine
-from app.routers import users
-import app.models
-import asyncio
-from app.routers import users, admin
 
+from app.routers import users, admin, articles, comments, tags, favorites, followers
 
 app = FastAPI(title="Мой проект на фастапи!")
 
 
-app.include_router(users.router)
-app.include_router(admin.router)
-
-
+app.include_router(users)
+app.include_router(admin)
+app.include_router(articles)
+app.include_router(comments)
+app.include_router(tags)
+app.include_router(favorites)
+app.include_router(followers)
 
 
 # ========== ЗАПУСК СЕРВЕРА ==========
