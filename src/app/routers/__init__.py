@@ -13,5 +13,5 @@ __all__ = [
     "comments",
     "tags",
     "favorites",
-    "followers",
+    "followers"
 ]

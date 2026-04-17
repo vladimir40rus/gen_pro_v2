@@ -6,10 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import User, Favorite, Comment, Article, Follower
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.wrappers import UserResponseWrapper, ProfileResponseWrapper
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-# Схема для статистики пользователя (ДОБАВЛЕНА)
+
+# Схема для статистики пользователя
 class UserStats(BaseModel):
     username: str
     articles_count: int = 0
@@ -32,12 +34,17 @@ async def get_current_user(db: AsyncSession = Depends(get_db)):
     return user
 
 
-@router.post("/", response_model=UserResponse, summary="Регистрация нового пользователя")
+@router.post("/",
+     response_model=UserResponseWrapper,
+     status_code=status.HTTP_201_CREATED,
+     summary="Регистрация нового пользователя"
+ )
 async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Создать нового пользователя"""
     # Проверяем уникальность username
     existing = await db.execute(select(User).where(User.username == user_data.username))
-    if existing.scalar_one_or_none():
+    result = existing.scalar_one_or_none()
+    if result:
         raise HTTPException(400, "Username already exists")
 
     # Проверяем уникальность email
@@ -55,12 +62,12 @@ async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db))
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return user
+
+    # Оборачиваем ответ
+    return UserResponseWrapper(user=UserResponse.model_validate(user).model_dump())
 
 
-
-
-@router.put("/", response_model=UserResponse, summary="Обновление профиля")
+@router.put("/", response_model=UserResponseWrapper, summary="Обновление профиля")
 async def update_user(
         user_data: UserUpdate,
         current_user: User = Depends(get_current_user),
@@ -98,7 +105,9 @@ async def update_user(
 
     await db.commit()
     await db.refresh(current_user)
-    return current_user
+
+    # Оборачиваем ответ
+    return UserResponseWrapper(user=UserResponse.model_validate(current_user).model_dump())
 
 
 @router.delete("/", status_code=status.HTTP_204_NO_CONTENT, summary="Удаление текущего пользователя")
@@ -109,7 +118,6 @@ async def delete_current_user(
     """Удалить текущего пользователя (первого в БД)"""
     await db.delete(current_user)
     await db.commit()
-
 
 
 @router.get("/stats/{username}", response_model=UserStats, summary="Получить статистику пользователя")
@@ -154,7 +162,6 @@ async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
     following_count = following_count_result.scalar() or 0
 
     # Общее количество лайков на всех статьях пользователя
-    # Считаем количество записей в Favorite, где article_id принадлежит статьям пользователя
     total_likes_received_result = await db.execute(
         select(func.count())
         .select_from(Favorite)
@@ -173,6 +180,47 @@ async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
         total_likes_received=total_likes_received
     )
 
-@router.get("/", response_model=UserResponse, summary="Получить текущего пользователя")
+
+@router.get("/", response_model=UserResponseWrapper, summary="Получить текущего пользователя")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    return current_user
+    """Получить текущего пользователя"""
+    return UserResponseWrapper(user=UserResponse.model_validate(current_user).model_dump())
+
+
+# НОВЫЙ ЭНДПОИНТ - профиль пользователя
+@router.get("/profile/{username}", response_model=ProfileResponseWrapper,
+            summary="Получить публичный профиль пользователя")
+async def get_profile(username: str, db: AsyncSession = Depends(get_db)):
+    """Получить публичный профиль пользователя"""
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    # Подсчет подписчиков
+    followers_count = await db.execute(
+        select(func.count()).select_from(Follower).where(Follower.following_id == user.id)
+    )
+
+    # Подсчет количества статей
+    articles_count = await db.execute(
+        select(func.count()).select_from(Article).where(Article.author_id == user.id)
+    )
+
+    # Подсчет подписок пользователя
+    following_count = await db.execute(
+        select(func.count()).select_from(Follower).where(Follower.follower_id == user.id)
+    )
+
+    profile = {
+        "username": user.username,
+        "bio": user.bio,
+        "image_url": user.image_url,
+        "following": False,  # Пока false, т.к. нет аутентификации
+        "followers_count": followers_count.scalar() or 0,
+        "following_count": following_count.scalar() or 0,
+        "articles_count": articles_count.scalar() or 0
+    }
+
+    return ProfileResponseWrapper(profile=profile)

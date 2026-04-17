@@ -6,14 +6,14 @@ import os
 Base = declarative_base()
 
 # Настройка подключения к PostgreSQL из переменной окружения
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@db:5432/fastapi_db"  # Значение по умолчанию
-)
 # DATABASE_URL = os.getenv(
 #     "DATABASE_URL",
-#     "postgresql+asyncpg://127.0.0.1:postgres@postgres:5433/fastapi_db"  # Значение по умолчанию
+#     "postgresql+asyncpg://postgres:postgres@db:5432/fastapi_db"  # Значение по умолчанию
 # )
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/fastapi_db"  # Значение по умолчанию
+)
 # Создание engine (только один раз!)
 engine = create_async_engine(
     DATABASE_URL,
