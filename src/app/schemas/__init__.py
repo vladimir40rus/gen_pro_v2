@@ -9,10 +9,10 @@ from app.schemas.wrappers import (
     ArticlesResponseWrapper,
     CommentResponseWrapper,
     CommentsResponseWrapper,
-    TagResponseWrapper,
     TagsResponseWrapper
 )
 
+# Для обратной совместимости с существующими импортами
 __all__ = [
     "UserBase",
     "UserCreate",
@@ -36,6 +36,5 @@ __all__ = [
     "ArticlesResponseWrapper",
     "CommentResponseWrapper",
     "CommentsResponseWrapper",
-    "TagResponseWrapper",
     "TagsResponseWrapper"
 ]

@@ -30,12 +30,14 @@ class UserCreate(UserBase):
 
 
 class UserResponse(BaseModel):
-    """Ответ с данными пользователя (без пароля, соответствует OpenAPI)"""
+    """Ответ с данными пользователя (соответствует OpenAPI)"""
+    id: int = Field(..., description="ID пользователя", examples=[123])
     username: str = Field(..., description="Имя пользователя", examples=["john_doe"])
     email: EmailStr = Field(..., description="Email пользователя", examples=["john@example.com"])
-    bio: Optional[str] = Field(None, description="Информация о пользователе", examples=["Full-stack developer"])
-    image_url: Optional[str] = Field(None, description="URL аватара пользователя",
-                                     examples=["https://storage.com/avatars/123.jpg"])
+    bio: Optional[str] = Field(None, description="Информация о пользователе", examples=["Full-stack developer and tech writer"])
+    image_url: Optional[str] = Field(None, description="URL аватара пользователя", examples=["https://storage.com/avatars/123.jpg"])
+    created_at: datetime.datetime = Field(..., description="Дата регистрации", examples=["2024-01-15T10:30:00Z"])
+    updated_at: Optional[datetime.datetime] = Field(None, description="Дата последнего обновления", examples=["2024-02-20T15:45:00Z"])
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,14 +80,14 @@ class UserUpdate(BaseModel):
 
 
 class UserUpdateWrapper(BaseModel):
-    """Обертка для обновления пользователя"""
+    """Обертка для обновления пользователя (соответствует OpenAPI)"""
     user: UserUpdate
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class Profile(BaseModel):
-    """Публичный профиль пользователя"""
+    """Публичный профиль пользователя (соответствует OpenAPI)"""
     username: str = Field(..., description="Имя пользователя", examples=["john_doe"])
     bio: Optional[str] = Field(None, description="Информация о пользователе", examples=["Full-stack developer"])
     image_url: Optional[str] = Field(None, description="URL аватара", examples=["https://storage.com/avatars/123.jpg"])
@@ -95,7 +97,7 @@ class Profile(BaseModel):
 
 
 class ProfileResponse(BaseModel):
-    """Обертка для профиля"""
+    """Обертка для профиля (соответствует OpenAPI)"""
     profile: Profile
 
     model_config = ConfigDict(from_attributes=True)

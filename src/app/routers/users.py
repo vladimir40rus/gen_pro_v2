@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import User, Favorite, Comment, Article, Follower
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserUpdateWrapper
-from app.schemas.wrappers import UserResponseWrapper, ProfileResponseWrapper
+from app.schemas.wrappers import UserResponseWrapper, ProfileResponseWrapper, UserData, ProfileData
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -32,6 +32,19 @@ async def get_current_user(db: AsyncSession = Depends(get_db)):
     return user
 
 
+def format_user_response(user: User) -> UserData:
+    """Форматирует пользователя для ответа"""
+    return UserData(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        bio=user.bio,
+        image_url=user.image_url,
+        created_at=user.created_at.isoformat() if user.created_at else None,
+        updated_at=user.updated_at.isoformat() if user.updated_at else None
+    )
+
+
 @router.post("/", response_model=UserResponseWrapper, summary="Регистрация нового пользователя")
 async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Создать нового пользователя"""
@@ -55,25 +68,18 @@ async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db))
     await db.commit()
     await db.refresh(user)
 
-    user_response = UserResponse(
-        username=user.username,
-        email=user.email,
-        bio=user.bio,
-        image_url=user.image_url
-    )
-
-    return UserResponseWrapper(user=user_response.model_dump())
+    return UserResponseWrapper(user=format_user_response(user))
 
 
 @router.put("/", response_model=UserResponseWrapper, summary="Обновление профиля")
 async def update_user(
-        update_data: UserUpdateWrapper,  # ← ОБЕРТКА
+        update_data: UserUpdateWrapper,
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
     """Обновить текущего пользователя"""
 
-    user_data = update_data.user  # ← ДОСТАЁМ ДАННЫЕ
+    user_data = update_data.user
 
     if user_data.username is not None:
         if user_data.username != current_user.username:
@@ -105,41 +111,30 @@ async def update_user(
     await db.commit()
     await db.refresh(current_user)
 
-    user_response = UserResponse(
-        username=current_user.username,
-        email=current_user.email,
-        bio=current_user.bio,
-        image_url=current_user.image_url
-    )
-
-    return UserResponseWrapper(user=user_response.model_dump())
+    return UserResponseWrapper(user=format_user_response(current_user))
 
 
 @router.get("/", response_model=UserResponseWrapper, summary="Получить текущего пользователя")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    user_response = UserResponse(
-        username=current_user.username,
-        email=current_user.email,
-        bio=current_user.bio,
-        image_url=current_user.image_url
-    )
-    return UserResponseWrapper(user=user_response.model_dump())
+    """Получить информацию о текущем пользователе"""
+    return UserResponseWrapper(user=format_user_response(current_user))
 
 
 @router.get("/profile/{username}", response_model=ProfileResponseWrapper, summary="Получить публичный профиль")
 async def get_profile(username: str, db: AsyncSession = Depends(get_db)):
+    """Получить публичный профиль пользователя по username"""
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(404, "User not found")
 
-    profile = {
-        "username": user.username,
-        "bio": user.bio,
-        "image_url": user.image_url,
-        "following": False
-    }
+    profile = ProfileData(
+        username=user.username,
+        bio=user.bio,
+        image_url=user.image_url,
+        following=False
+    )
 
     return ProfileResponseWrapper(profile=profile)
 
@@ -149,12 +144,14 @@ async def delete_current_user(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
+    """Удалить текущего пользователя"""
     await db.delete(current_user)
     await db.commit()
 
 
 @router.get("/stats/{username}", response_model=UserStats, summary="Получить статистику пользователя")
 async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
+    """Получить статистику пользователя по username"""
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
 
