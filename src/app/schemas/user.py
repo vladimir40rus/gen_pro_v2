@@ -29,8 +29,15 @@ class UserCreate(UserBase):
     )
 
 
+class UserCreateWrapper(BaseModel):
+    """Обертка для создания пользователя"""
+    user: UserCreate
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserResponse(BaseModel):
-    """Ответ с данными пользователя (соответствует OpenAPI)"""
+    """Ответ с данными пользователя"""
     id: int = Field(..., description="ID пользователя", examples=[123])
     username: str = Field(..., description="Имя пользователя", examples=["john_doe"])
     email: EmailStr = Field(..., description="Email пользователя", examples=["john@example.com"])
@@ -80,14 +87,14 @@ class UserUpdate(BaseModel):
 
 
 class UserUpdateWrapper(BaseModel):
-    """Обертка для обновления пользователя (соответствует OpenAPI)"""
+    """Обертка для обновления пользователя"""
     user: UserUpdate
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class Profile(BaseModel):
-    """Публичный профиль пользователя (соответствует OpenAPI)"""
+    """Публичный профиль пользователя"""
     username: str = Field(..., description="Имя пользователя", examples=["john_doe"])
     bio: Optional[str] = Field(None, description="Информация о пользователе", examples=["Full-stack developer"])
     image_url: Optional[str] = Field(None, description="URL аватара", examples=["https://storage.com/avatars/123.jpg"])
@@ -97,7 +104,7 @@ class Profile(BaseModel):
 
 
 class ProfileResponse(BaseModel):
-    """Обертка для профиля (соответствует OpenAPI)"""
+    """Обертка для профиля"""
     profile: Profile
 
     model_config = ConfigDict(from_attributes=True)
