@@ -1,29 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import Optional, Annotated
 
 from app.database import get_db
 from app.models import Comment, Article, User
-from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse, Author
-from app.schemas.wrappers import CommentResponseWrapper, CommentsResponseWrapper
+from app.schemas.comment import (
+    CommentResponse,
+    Author,
+    CreateCommentRequest,
+    UpdateCommentRequest,
+    CommentResponseWrapper,
+    CommentsResponseWrapper
+)
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
 
 
 @router.post("/articles/{slug}/comments", response_model=CommentResponseWrapper,
+             status_code=status.HTTP_201_CREATED,
              summary="Добавление комментария к статье")
 async def create_comment(
-        slug: str,
-        comment_data: CommentCreate,
-        user_id: int = Query(..., description="ID пользователя (временное решение без JWT)"),
-        db: AsyncSession = Depends(get_db)
+    comment_data: CreateCommentRequest,
+    slug: str = Path(..., description="Уникальный идентификатор статьи", example="how-to-learn-javascript-in-2024"),
+    # user_id: int = Query(..., description="ID пользователя (временное решение без JWT)"),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Добавить новый комментарий к статье.
 
     - **slug**: уникальный идентификатор статьи
-    - **comment_data**: текст комментария
+    - **comment_data**: объект с полем comment, содержащим текст комментария
     - **user_id**: ID автора комментария (временно передается в query)
     """
     # Находим статью по slug
@@ -39,7 +46,7 @@ async def create_comment(
 
     # Создаем комментарий
     comment = Comment(
-        body=comment_data.body,
+        body=comment_data.comment.body,
         article_id=article.id,
         author_id=user_id
     )
@@ -55,19 +62,24 @@ async def create_comment(
         author=Author(
             username=user.username,
             bio=user.bio,
-            image=user.image_url
+            image_url=user.image_url,
+            following=True,  # заглушка
+            followers_count=42,  # заглушка
+            following_count=15,  # заглушка
+            articles_count=7  # заглушка
         ),
+        article_id=article.id,
         created_at=comment.created_at,
         updated_at=comment.updated_at
     )
 
-    return CommentResponseWrapper(comment=comment_response.model_dump())
+    return CommentResponseWrapper(comment=comment_response)
 
 
 @router.get("/articles/{slug}/comments", response_model=CommentsResponseWrapper,
             summary="Получение комментариев к статье")
 async def get_article_comments(
-        slug: str,
+        slug: Annotated[str, Path(description="Уникальный идентификатор статьи", examples=["how-to-learn-javascript-in-2024"])],
         skip: int = Query(0, ge=0, description="Количество комментариев для пропуска"),
         limit: int = Query(20, ge=1, le=100, description="Максимальное количество комментариев"),
         db: AsyncSession = Depends(get_db)
@@ -104,8 +116,7 @@ async def get_article_comments(
     # Формируем ответы
     response_comments = []
     for comment in comments:
-        author_result = await db.execute(select(User).where(User.id == comment.author_id))
-        author = author_result.scalar_one()
+        author = await db.get(User, comment.author_id)
 
         comment_response = CommentResponse(
             id=comment.id,
@@ -113,22 +124,27 @@ async def get_article_comments(
             author=Author(
                 username=author.username,
                 bio=author.bio,
-                image=author.image_url
+                image_url=author.image_url,
+                following=False,  # заглушка
+                followers_count=0,  # заглушка
+                following_count=0,  # заглушка
+                articles_count=0  # заглушка
             ),
+            article_id=article.id,
             created_at=comment.created_at,
             updated_at=comment.updated_at
         )
-        response_comments.append(comment_response.model_dump())
+        response_comments.append(comment_response)
 
-    return CommentsResponseWrapper(comments=response_comments)
+    return CommentsResponseWrapper(comments=response_comments, comments_count=total_count)
 
 
 @router.put("/articles/{slug}/comments/{comment_id}", response_model=CommentResponseWrapper,
             summary="Редактирование комментария")
 async def update_comment(
-        slug: str,
-        comment_id: int,
-        comment_data: CommentUpdate,
+        slug: Annotated[str, Path(description="Уникальный идентификатор статьи", examples=["how-to-learn-javascript-in-2024"])],
+        comment_id: Annotated[int, Path(description="ID комментария", examples=[789])],
+        comment_data: UpdateCommentRequest,
         user_id: int = Query(..., description="ID пользователя (для проверки прав)"),
         db: AsyncSession = Depends(get_db)
 ):
@@ -161,8 +177,8 @@ async def update_comment(
         raise HTTPException(403, "You don't have permission to edit this comment")
 
     # Обновляем комментарий
-    if comment_data.body is not None:
-        comment.body = comment_data.body
+    if comment_data.comment.body is not None:
+        comment.body = comment_data.comment.body
 
     await db.commit()
     await db.refresh(comment)
@@ -177,20 +193,25 @@ async def update_comment(
         author=Author(
             username=author.username,
             bio=author.bio,
-            image=author.image_url
+            image_url=author.image_url,
+            following=True,  # заглушка
+            followers_count=42,  # заглушка
+            following_count=15,  # заглушка
+            articles_count=7  # заглушка
         ),
+        article_id=article.id,
         created_at=comment.created_at,
         updated_at=comment.updated_at
     )
 
-    return CommentResponseWrapper(comment=comment_response.model_dump())
+    return CommentResponseWrapper(comment=comment_response)
 
 
 @router.delete("/articles/{slug}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT,
                summary="Удаление комментария")
 async def delete_comment(
-        slug: str,
-        comment_id: int,
+        slug: Annotated[str, Path(description="Уникальный идентификатор статьи", examples=["how-to-learn-javascript-in-2024"])],
+        comment_id: Annotated[int, Path(description="ID комментария", examples=[789])],
         user_id: int = Query(..., description="ID пользователя (для проверки прав)"),
         db: AsyncSession = Depends(get_db)
 ):
