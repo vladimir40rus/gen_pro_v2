@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import User, Favorite, Comment, Article, Follower
 from app.schemas.user import UserCreate, UserCreateWrapper, UserResponse, UserUpdate, UserUpdateWrapper
-from app.schemas.wrappers import UserResponseWrapper, ProfileResponseWrapper, UserData, ProfileData
+from app.schemas.wrappers import UserResponseWrapper, ProfileResponseWrapper, UserData
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter(prefix="", tags=["Users"])
 
 
 class UserStats(BaseModel):
@@ -51,8 +51,9 @@ def format_user_response(user: User) -> UserData:
     )
 
 
+# ========== Регистрация ==========
 @router.post(
-    "/",
+    "/users",
     response_model=UserResponseWrapper,
     status_code=status.HTTP_201_CREATED,
     summary="Регистрация нового пользователя",
@@ -66,23 +67,23 @@ def format_user_response(user: User) -> UserData:
                             "id": 123,
                             "username": "johndoe",
                             "email": "john@example.com",
-                            "bio": "Full-stack developer and tech writer",
-                            "image_url": "https://storage.com/avatars/123.jpg",
+                            "bio": None,
+                            "image_url": None,
                             "created_at": "2024-01-15T10:30:00Z",
-                            "updated_at": "2024-02-20T15:45:00Z"
+                            "updated_at": None
                         }
                     }
                 }
             }
         },
         422: {
-            "description": "Ошибка валидации (email или username уже заняты)",
+            "description": "Ошибка валидации",
             "content": {
                 "application/json": {
                     "example": {
                         "errors": {
-                            "email": ["can't be blank", "is invalid"],
-                            "password": ["is too short (minimum is 8 characters)"]
+                            "username": ["already exists"],
+                            "email": ["already exists"]
                         }
                     }
                 }
@@ -127,7 +128,7 @@ async def create_user(create_data: UserCreateWrapper, db: AsyncSession = Depends
     elif len(user_data.password) < 8:
         errors["password"] = ["is too short (minimum is 8 characters)"]
 
-    # Если есть ошибки - возвращаем 422 с нужным форматом
+    # Если есть ошибки
     if errors:
         return JSONResponse(
             status_code=422,
@@ -150,8 +151,44 @@ async def create_user(create_data: UserCreateWrapper, db: AsyncSession = Depends
     return UserResponseWrapper(user=format_user_response(user))
 
 
+# ========== Текущий пользователь ==========
+@router.get(
+    "/user",
+    response_model=UserResponseWrapper,
+    summary="Получение текущего пользователя",
+    responses={
+        200: {
+            "description": "Информация о пользователе",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user": {
+                            "id": 123,
+                            "username": "johndoe",
+                            "email": "john@example.com",
+                            "bio": "Full-stack developer and tech writer",
+                            "image_url": "https://storage.com/avatars/123.jpg",
+                            "created_at": "2024-01-15T10:30:00Z",
+                            "updated_at": "2024-02-20T15:45:00Z"
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Не аутентифицирован"
+        }
+    }
+)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Получить информацию о текущем пользователе"""
+    if isinstance(current_user, JSONResponse):
+        return current_user
+    return UserResponseWrapper(user=format_user_response(current_user))
+
+
 @router.put(
-    "/",
+    "/user",
     response_model=UserResponseWrapper,
     summary="Обновление профиля",
     responses={
@@ -173,25 +210,18 @@ async def create_user(create_data: UserCreateWrapper, db: AsyncSession = Depends
                 }
             }
         },
+        401: {
+            "description": "Не аутентифицирован"
+        },
         422: {
             "description": "Ошибка валидации",
             "content": {
                 "application/json": {
                     "example": {
                         "errors": {
-                            "email": ["can't be blank", "is invalid"],
-                            "password": ["is too short (minimum is 8 characters)"]
+                            "username": ["already exists"],
+                            "email": ["already exists"]
                         }
-                    }
-                }
-            }
-        },
-        401: {
-            "description": "Не аутентифицирован",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "Authentication required"
                     }
                 }
             }
@@ -205,7 +235,6 @@ async def update_user(
 ):
     """Обновить текущего пользователя"""
 
-    # Проверяем, вернулся ли пользователь или ошибка
     if isinstance(current_user, JSONResponse):
         return current_user
 
@@ -258,151 +287,25 @@ async def update_user(
     return UserResponseWrapper(user=format_user_response(current_user))
 
 
+# ========== Статистика ==========
 @router.get(
-    "/",
-    response_model=UserResponseWrapper,
-    summary="Получить текущего пользователя",
-    responses={
-        200: {
-            "description": "Информация о пользователе",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "user": {
-                            "id": 123,
-                            "username": "johndoe",
-                            "email": "john@example.com",
-                            "bio": "Full-stack developer and tech writer",
-                            "image_url": "https://storage.com/avatars/123.jpg",
-                            "created_at": "2024-01-15T10:30:00Z",
-                            "updated_at": "2024-02-20T15:45:00Z"
-                        }
-                    }
-                }
-            }
-        },
-        401: {
-            "description": "Не аутентифицирован",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "Authentication required"
-                    }
-                }
-            }
-        }
-    }
-)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Получить информацию о текущем пользователе"""
-    if isinstance(current_user, JSONResponse):
-        return current_user
-    return UserResponseWrapper(user=format_user_response(current_user))
-
-
-@router.get(
-    "/profile/{username}",
-    response_model=ProfileResponseWrapper,
-    summary="Получить публичный профиль",
-    responses={
-        200: {
-            "description": "Профиль найден",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "profile": {
-                            "username": "johndoe",
-                            "bio": "Full-stack developer",
-                            "image_url": "https://storage.com/avatars/123.jpg",
-                            "following": False
-                        }
-                    }
-                }
-            }
-        },
-        404: {
-            "description": "Пользователь не найден",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "User not found"
-                    }
-                }
-            }
-        }
-    }
-)
-async def get_profile(username: str, db: AsyncSession = Depends(get_db)):
-    """Получить публичный профиль пользователя по username"""
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        return JSONResponse(
-            status_code=404,
-            content={"error": "User not found"}
-        )
-
-    profile = ProfileData(
-        username=user.username,
-        bio=user.bio,
-        image_url=user.image_url,
-        following=False
-    )
-
-    return ProfileResponseWrapper(profile=profile)
-
-
-@router.delete(
-    "/",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Удаление текущего пользователя",
-    responses={
-        204: {
-            "description": "Пользователь успешно удален"
-        },
-        401: {
-            "description": "Не аутентифицирован",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "Authentication required"
-                    }
-                }
-            }
-        }
-    }
-)
-async def delete_current_user(
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
-):
-    """Удалить текущего пользователя"""
-    if isinstance(current_user, JSONResponse):
-        return current_user
-    await db.delete(current_user)
-    await db.commit()
-    return None
-
-
-@router.get(
-    "/stats/",
+    "/stats/user/{username}",
     response_model=UserStats,
-    summary="Получить статистику пользователя",
+    summary="Статистика пользователя",
     responses={
         200: {
             "description": "Статистика пользователя",
             "content": {
                 "application/json": {
                     "example": {
-                        "username": "string",
-                        "articles_published": 0,
+                        "username": "johndoe",
+                        "articles_published": 7,
                         "total_views": 0,
-                        "total_likes_received": 0,
-                        "total_comments_received": 0,
-                        "followers_count": 0,
-                        "following_count": 0,
-                        "joined_date": "2026-04-24"
+                        "total_likes_received": 42,
+                        "total_comments_received": 15,
+                        "followers_count": 10,
+                        "following_count": 7,
+                        "joined_date": "2024-01-15"
                     }
                 }
             }
@@ -412,21 +315,18 @@ async def delete_current_user(
         }
     }
 )
-async def get_user_stats(
-        username: str = Query(..., description="Имя пользователя"),
-        db: AsyncSession = Depends(get_db)
-):
+async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
     """Получить статистику пользователя по username"""
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": f"User '{username}' not found"}
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"User '{username}' not found"}
         )
 
-    # Количество статей пользователя
+    # Количество статей
     articles_count_result = await db.execute(
         select(func.count()).select_from(Article).where(Article.author_id == user.id)
     )
@@ -463,7 +363,7 @@ async def get_user_stats(
     following_count = following_count_result.scalar() or 0
 
     # Дата регистрации
-    joined_date = user.created_at.strftime("%Y-%m-%d") if user.created_at else "2026-04-24"
+    joined_date = user.created_at.strftime("%Y-%m-%d") if user.created_at else "2024-01-15"
 
     return UserStats(
         username=user.username,
