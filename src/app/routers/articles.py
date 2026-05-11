@@ -14,6 +14,12 @@ router = APIRouter(prefix="/articles", tags=["Articles"])
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
+async def get_current_user(db: AsyncSession) -> Optional[User]:
+    """Временно получить текущего пользователя (первого в таблице)"""
+    result = await db.execute(select(User).order_by(User.id).limit(1))
+    return result.scalar_one_or_none()
+
+
 async def get_author_stats(user_id: int, db: AsyncSession) -> dict:
     """Получить статистику автора"""
     from app.models import Follower
@@ -123,7 +129,7 @@ def format_article_response(article_data: dict, author_stats: dict = None) -> di
     }
 
 
-# ========== ЭНДПОИНТЫ СТАТЕЙ ==========
+# ========== ЭНДПОИНТЫ ==========
 
 @router.post(
     "",
@@ -190,16 +196,15 @@ def format_article_response(article_data: dict, author_stats: dict = None) -> di
 )
 async def create_article(
         create_data: ArticleCreateWrapper,
-        user_id: int = Query(..., description="ID автора (временно)"),
         db: AsyncSession = Depends(get_db)
 ):
     """Создать новую статью"""
-    # TODO Убрать user_id
     article_data = create_data.article
     errors = {}
 
-    author = await db.get(User, user_id)
-    if not author:
+    # Получаем текущего пользователя
+    current_user = await get_current_user(db)
+    if not current_user:
         return JSONResponse(
             status_code=401,
             content={"error": "Authentication required"}
@@ -223,7 +228,7 @@ async def create_article(
         description=article_data.description or "",
         body=article_data.body,
         slug=article_data.slug,
-        author_id=author.id
+        author_id=current_user.id
     )
 
     db.add(article)
@@ -243,8 +248,8 @@ async def create_article(
             db.add(article_tag)
         await db.commit()
 
-    author_stats = await get_author_stats(author.id, db)
-    article_info = await get_article_by_slug(article.slug, db, user_id)
+    author_stats = await get_author_stats(current_user.id, db)
+    article_info = await get_article_by_slug(article.slug, db, current_user.id)
 
     return ArticleResponseWrapper(article=format_article_response(article_info, author_stats))
 
@@ -254,7 +259,6 @@ async def create_article(
     response_model=ArticlesResponseWrapper,
     summary="Получение списка статей",
     description="Возвращает список статей с возможностью фильтрации",
-    tags=["Articles", "Feed"],
     responses={
         200: {
             "description": "Список статей",
@@ -299,10 +303,13 @@ async def list_articles(
                                          examples=["johndoe"]),
         limit: int = Query(20, ge=1, le=100, description="Количество записей на странице", examples=[20]),
         offset: int = Query(0, ge=0, description="Смещение для пагинации", examples=[0]),
-        user_id: Optional[int] = Query(None, description="ID текущего пользователя"),
         db: AsyncSession = Depends(get_db)
 ):
     """Получить список статей с фильтрацией и пагинацией"""
+
+    # Получаем текущего пользователя
+    current_user = await get_current_user(db)
+    user_id = current_user.id if current_user else None
 
     query = select(Article)
 
@@ -395,11 +402,12 @@ async def list_articles(
 )
 async def get_article(
         slug: str,
-        user_id: Optional[int] = Query(None, description="ID текущего пользователя"),
         db: AsyncSession = Depends(get_db)
 ):
     """Получить статью по slug"""
-    #TODO Убрать User_id
+    current_user = await get_current_user(db)
+    user_id = current_user.id if current_user else None
+
     article_info = await get_article_by_slug(slug, db, user_id)
 
     if not article_info:
@@ -476,12 +484,18 @@ async def get_article(
 async def update_article(
         slug: str,
         update_data: ArticleUpdateWrapper,
-        user_id: int = Query(..., description="ID пользователя (для проверки прав)"),
         db: AsyncSession = Depends(get_db)
 ):
     """Обновить статью (только автор)"""
 
-    article_info = await get_article_by_slug(slug, db, user_id)
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
+
+    article_info = await get_article_by_slug(slug, db, current_user.id)
     if not article_info:
         return JSONResponse(
             status_code=404,
@@ -490,7 +504,7 @@ async def update_article(
 
     article = article_info["article"]
 
-    if article.author_id != user_id:
+    if article.author_id != current_user.id:
         return JSONResponse(
             status_code=403,
             content={"error": "You don't have permission to edit this article"}
@@ -528,7 +542,7 @@ async def update_article(
     await db.commit()
     await db.refresh(article)
 
-    updated_info = await get_article_by_slug(article.slug, db, user_id)
+    updated_info = await get_article_by_slug(article.slug, db, current_user.id)
     author_stats = await get_author_stats(article.author_id, db)
 
     return ArticleResponseWrapper(article=format_article_response(updated_info, author_stats))
@@ -548,10 +562,16 @@ async def update_article(
 )
 async def delete_article(
         slug: str,
-        user_id: int = Query(..., description="ID пользователя (для проверки прав) - временно"),
         db: AsyncSession = Depends(get_db)
 ):
     """Удалить статью (только автор)"""
+
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
 
     result = await db.execute(select(Article).where(Article.slug == slug))
     article = result.scalar_one_or_none()
@@ -562,7 +582,7 @@ async def delete_article(
             content={"error": "Article not found"}
         )
 
-    if article.author_id != user_id:
+    if article.author_id != current_user.id:
         return JSONResponse(
             status_code=403,
             content={"error": "You don't have permission to delete this article"}
@@ -621,47 +641,41 @@ async def delete_article(
     }
 )
 async def get_feed(
-        user_id: int = Query(..., description="ID пользователя"),
         limit: int = Query(20, ge=1, le=100, description="Количество записей на странице", examples=[20]),
         offset: int = Query(0, ge=0, description="Смещение для пагинации", examples=[0]),
         db: AsyncSession = Depends(get_db)
 ):
     """Получить статьи авторов, на которых подписан пользователь"""
 
-    # Проверяем пользователя
-    user = await db.get(User, user_id)
-    if not user:
+    current_user = await get_current_user(db)
+    if not current_user:
         return JSONResponse(
             status_code=401,
             content={"error": "Authentication required"}
         )
 
-    # Находим подписки
     from app.models import Follower
     following_result = await db.execute(
-        select(Follower.following_id).where(Follower.follower_id == user_id)
+        select(Follower.following_id).where(Follower.follower_id == current_user.id)
     )
     following_ids = [row[0] for row in following_result.all()]
 
     if not following_ids:
         return ArticlesResponseWrapper(articles=[], articles_count=0)
 
-    # Запрос для подсчёта
     count_query = select(func.count()).select_from(Article).where(Article.author_id.in_(following_ids))
     total_count_result = await db.execute(count_query)
     total_count = total_count_result.scalar() or 0
 
-    # Получаем статьи
     query = select(Article).where(Article.author_id.in_(following_ids))
     query = query.order_by(desc(Article.created_at)).offset(offset).limit(limit)
 
     result = await db.execute(query)
     articles = result.scalars().all()
 
-    # Формируем ответ
     response_articles = []
     for article in articles:
-        article_info = await get_article_by_slug(article.slug, db, user_id)
+        article_info = await get_article_by_slug(article.slug, db, current_user.id)
         author_stats = await get_author_stats(article.author_id, db)
         response_articles.append(format_article_response(article_info, author_stats))
 
@@ -737,19 +751,14 @@ async def search_articles(
         offset: int = Query(0, ge=0, description="Смещение для пагинации", examples=[0]),
         sort: str = Query("relevance", pattern="^(relevance|newest|oldest)$", description="Сортировка результатов",
                           examples=["relevance"]),
-        user_id: Optional[int] = Query(None, description="ID текущего пользователя (для проверки избранного)"),
         db: AsyncSession = Depends(get_db)
 ):
     """
     Полнотекстовый поиск по статьям.
-
-    - **q**: поисковый запрос (обязательный, минимум 3 символа)
-    - **tag**: фильтр по тегу
-    - **author**: фильтр по автору
-    - **limit**: количество записей на странице
-    - **offset**: смещение для пагинации
-    - **sort**: сортировка (relevance, newest, oldest)
     """
+
+    current_user = await get_current_user(db)
+    user_id = current_user.id if current_user else None
 
     query = select(Article)
 

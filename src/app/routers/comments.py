@@ -15,6 +15,12 @@ router = APIRouter(prefix="/articles", tags=["Comments"])
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
+async def get_current_user(db: AsyncSession) -> Optional[User]:
+    """Временно получить текущего пользователя (первого в таблице)"""
+    result = await db.execute(select(User).order_by(User.id).limit(1))
+    return result.scalar_one_or_none()
+
+
 async def get_author_stats(user_id: int, db: AsyncSession) -> dict:
     """Получить статистику автора"""
     from app.models import Follower, Article
@@ -46,7 +52,6 @@ async def get_comment_with_author(comment: Comment, db: AsyncSession, current_us
     author = await db.get(User, comment.author_id)
     author_stats = await get_author_stats(author.id, db)
 
-    # Проверяем, подписан ли текущий пользователь на автора
     following = False
     if current_user_id:
         from app.models import Follower
@@ -118,12 +123,17 @@ async def get_comment_with_author(comment: Comment, db: AsyncSession, current_us
 async def create_comment(
         slug: str,
         comment_data: CommentCreateWrapper,
-        user_id: int = Query(..., description="ID пользователя (временно)"),
         db: AsyncSession = Depends(get_db)
 ):
     """Добавить новый комментарий к статье"""
 
-    # Находим статью
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
+
     article_result = await db.execute(select(Article).where(Article.slug == slug))
     article = article_result.scalar_one_or_none()
     if not article:
@@ -132,26 +142,17 @@ async def create_comment(
             content={"error": "Article not found"}
         )
 
-    # Проверяем пользователя
-    user = await db.get(User, user_id)
-    if not user:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Authentication required"}
-        )
-
-    # Создаём комментарий
     comment = Comment(
         body=comment_data.comment.body,
         article_id=article.id,
-        author_id=user_id
+        author_id=current_user.id
     )
 
     db.add(comment)
     await db.commit()
     await db.refresh(comment)
 
-    comment_response = await get_comment_with_author(comment, db, user_id)
+    comment_response = await get_comment_with_author(comment, db, current_user.id)
 
     return CommentResponseWrapper(comment=comment_response)
 
@@ -201,7 +202,9 @@ async def get_article_comments(
 ):
     """Получить все комментарии к статье"""
 
-    # Находим статью
+    current_user = await get_current_user(db)
+    user_id = current_user.id if current_user else None
+
     article_result = await db.execute(select(Article).where(Article.slug == slug))
     article = article_result.scalar_one_or_none()
     if not article:
@@ -210,7 +213,6 @@ async def get_article_comments(
             content={"error": "Article not found"}
         )
 
-    # Получаем комментарии
     result = await db.execute(
         select(Comment)
         .where(Comment.article_id == article.id)
@@ -220,10 +222,9 @@ async def get_article_comments(
     )
     comments = result.scalars().all()
 
-    # Формируем ответ
     response_comments = []
     for comment in comments:
-        comment_response = await get_comment_with_author(comment, db, None)
+        comment_response = await get_comment_with_author(comment, db, user_id)
         response_comments.append(comment_response)
 
     return CommentsResponseWrapper(comments=response_comments)
@@ -267,7 +268,6 @@ async def get_article_comments(
 )
 async def update_comment(
         comment_data: CommentUpdateWrapper,
-        user_id: int = Query(..., description="ID пользователя (для проверки прав)"),
         slug: str = Path(..., description="Уникальный идентификатор статьи",
                          examples=["how-to-learn-javascript-in-2024"]),
         comment_id: int = Path(..., description="ID комментария", examples=[789]),
@@ -275,7 +275,13 @@ async def update_comment(
 ):
     """Обновить комментарий (только автор)"""
 
-    # Находим комментарий
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
+
     result = await db.execute(select(Comment).where(Comment.id == comment_id))
     comment = result.scalar_one_or_none()
     if not comment:
@@ -284,21 +290,19 @@ async def update_comment(
             content={"error": "Comment not found"}
         )
 
-    # Проверяем права
-    if comment.author_id != user_id:
+    if comment.author_id != current_user.id:
         return JSONResponse(
             status_code=403,
             content={"error": "You don't have permission to edit this comment"}
         )
 
-    # Обновляем
     if comment_data.comment.body is not None:
         comment.body = comment_data.comment.body
 
     await db.commit()
     await db.refresh(comment)
 
-    comment_response = await get_comment_with_author(comment, db, user_id)
+    comment_response = await get_comment_with_author(comment, db, current_user.id)
 
     return CommentResponseWrapper(comment=comment_response)
 
@@ -316,13 +320,19 @@ async def update_comment(
     }
 )
 async def delete_comment(
-        user_id: int = Query(..., description="ID пользователя (для проверки прав)"),
         slug: str = Path(..., description="Уникальный идентификатор статьи",
                          examples=["how-to-learn-javascript-in-2024"]),
         comment_id: int = Path(..., description="ID комментария", examples=[789]),
         db: AsyncSession = Depends(get_db)
 ):
     """Удалить комментарий (только автор)"""
+
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
 
     result = await db.execute(select(Comment).where(Comment.id == comment_id))
     comment = result.scalar_one_or_none()
@@ -332,7 +342,7 @@ async def delete_comment(
             content={"error": "Comment not found"}
         )
 
-    if comment.author_id != user_id:
+    if comment.author_id != current_user.id:
         return JSONResponse(
             status_code=403,
             content={"error": "You don't have permission to delete this comment"}

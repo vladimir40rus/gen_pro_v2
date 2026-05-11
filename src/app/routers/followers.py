@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional  # ← ДОБАВИТЬ ЭТУ СТРОКУ
+from typing import Optional
 
 from app.database import get_db
 from app.models import User, Follower, Article
 from app.schemas.wrappers import ProfileResponseWrapper, ProfileData
 
 router = APIRouter(prefix="/profiles", tags=["Profile"])
+
+
+async def get_current_user(db: AsyncSession) -> Optional[User]:
+    """Временно получить текущего пользователя (первого в таблице)"""
+    result = await db.execute(select(User).order_by(User.id).limit(1))
+    return result.scalar_one_or_none()
 
 
 async def get_profile_data(username: str, current_user_id: Optional[int] = None, db: AsyncSession = None) -> dict:
@@ -19,22 +25,18 @@ async def get_profile_data(username: str, current_user_id: Optional[int] = None,
     if not user:
         return None
 
-    # Подсчёт подписчиков
     followers_count = await db.execute(
         select(func.count()).select_from(Follower).where(Follower.following_id == user.id)
     )
 
-    # Подсчёт подписок
     following_count = await db.execute(
         select(func.count()).select_from(Follower).where(Follower.follower_id == user.id)
     )
 
-    # Количество статей
     articles_count = await db.execute(
         select(func.count()).select_from(Article).where(Article.author_id == user.id)
     )
 
-    # Подписан ли текущий пользователь
     following = False
     if current_user_id:
         follow_result = await db.execute(
@@ -55,6 +57,8 @@ async def get_profile_data(username: str, current_user_id: Optional[int] = None,
         "articles_count": articles_count.scalar() or 0
     }
 
+
+# ========== ЭНДПОИНТЫ ==========
 
 @router.get(
     "/{username}",
@@ -84,12 +88,14 @@ async def get_profile_data(username: str, current_user_id: Optional[int] = None,
     }
 )
 async def get_profile(
-        username: str,
-        user_id: Optional[int] = Query(None, description="ID текущего пользователя"),
+        username: str = Path(..., description="Имя пользователя", examples=["johndoe"]),
         db: AsyncSession = Depends(get_db)
 ):
     """Получить публичный профиль пользователя"""
-    profile_data = await get_profile_data(username, user_id, db)
+    current_user = await get_current_user(db)
+    current_user_id = current_user.id if current_user else None
+
+    profile_data = await get_profile_data(username, current_user_id, db)
 
     if not profile_data:
         return JSONResponse(
@@ -132,13 +138,18 @@ async def get_profile(
     }
 )
 async def follow_user(
-        username: str,
-        follower_id: int = Query(..., description="ID текущего пользователя"),
+        username: str = Path(..., description="Имя пользователя", examples=["johndoe"]),
         db: AsyncSession = Depends(get_db)
 ):
     """Подписаться на пользователя"""
 
-    # Находим пользователя, на которого подписываемся
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
+
     result = await db.execute(select(User).where(User.username == username))
     following = result.scalar_one_or_none()
     if not following:
@@ -147,33 +158,28 @@ async def follow_user(
             content={"error": "User not found"}
         )
 
-    # Проверяем, не подписывается ли на себя
-    if follower_id == following.id:
+    if current_user.id == following.id:
         return JSONResponse(
             status_code=400,
             content={"error": "Cannot follow yourself"}
         )
 
-    # Проверяем, не подписан ли уже
     existing = await db.execute(
         select(Follower).where(
-            Follower.follower_id == follower_id,
+            Follower.follower_id == current_user.id,
             Follower.following_id == following.id
         )
     )
     if existing.scalar_one_or_none():
-        # Уже подписан, возвращаем текущий профиль
-        profile_data = await get_profile_data(username, follower_id, db)
+        profile_data = await get_profile_data(username, current_user.id, db)
         profile = ProfileData(**profile_data)
         return ProfileResponseWrapper(profile=profile)
 
-    # Добавляем подписку
-    follow = Follower(follower_id=follower_id, following_id=following.id)
+    follow = Follower(follower_id=current_user.id, following_id=following.id)
     db.add(follow)
     await db.commit()
 
-    # Возвращаем обновлённый профиль
-    profile_data = await get_profile_data(username, follower_id, db)
+    profile_data = await get_profile_data(username, current_user.id, db)
     profile = ProfileData(**profile_data)
 
     return ProfileResponseWrapper(profile=profile)
@@ -209,13 +215,18 @@ async def follow_user(
     }
 )
 async def unfollow_user(
-        username: str,
-        follower_id: int = Query(..., description="ID текущего пользователя"),
+        username: str = Path(..., description="Имя пользователя", examples=["johndoe"]),
         db: AsyncSession = Depends(get_db)
 ):
     """Отписаться от пользователя"""
 
-    # Находим пользователя
+    current_user = await get_current_user(db)
+    if not current_user:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Authentication required"}
+        )
+
     result = await db.execute(select(User).where(User.username == username))
     following = result.scalar_one_or_none()
     if not following:
@@ -224,27 +235,23 @@ async def unfollow_user(
             content={"error": "User not found"}
         )
 
-    # Находим подписку
     follow_result = await db.execute(
         select(Follower).where(
-            Follower.follower_id == follower_id,
+            Follower.follower_id == current_user.id,
             Follower.following_id == following.id
         )
     )
     follow = follow_result.scalar_one_or_none()
 
     if not follow:
-        # Не был подписан, возвращаем текущий профиль
-        profile_data = await get_profile_data(username, follower_id, db)
+        profile_data = await get_profile_data(username, current_user.id, db)
         profile = ProfileData(**profile_data)
         return ProfileResponseWrapper(profile=profile)
 
-    # Удаляем подписку
     await db.delete(follow)
     await db.commit()
 
-    # Возвращаем обновлённый профиль
-    profile_data = await get_profile_data(username, follower_id, db)
+    profile_data = await get_profile_data(username, current_user.id, db)
     profile = ProfileData(**profile_data)
 
     return ProfileResponseWrapper(profile=profile)
