@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
 from app.database import get_db
 from app.models import User, Favorite, Comment, Article, Follower
-from app.schemas.user import UserCreate, UserCreateWrapper, UserResponse, UserUpdate, UserUpdateWrapper
+from app.schemas.user import UserCreate, UserCreateWrapper, UserResponse, UserUpdate, UserUpdateWrapper, \
+    LoginRequestWrapper
 from app.schemas.wrappers import UserResponseWrapper, ProfileResponseWrapper, UserData
 
 router = APIRouter(prefix="", tags=["Users"])
@@ -57,6 +59,7 @@ def format_user_response(user: User) -> UserData:
     response_model=UserResponseWrapper,
     status_code=status.HTTP_201_CREATED,
     summary="Регистрация нового пользователя",
+    tags=["Authentication"],
     responses={
         201: {
             "description": "Пользователь успешно создан",
@@ -67,10 +70,10 @@ def format_user_response(user: User) -> UserData:
                             "id": 123,
                             "username": "johndoe",
                             "email": "john@example.com",
-                            "bio": None,
-                            "image_url": None,
+                            "bio": "Full-stack developer and tech writer",
+                            "image_url": "https://storage.com/avatars/123.jpg",
                             "created_at": "2024-01-15T10:30:00Z",
-                            "updated_at": None
+                            "updated_at": "2024-02-20T15:45:00Z"
                         }
                     }
                 }
@@ -147,6 +150,84 @@ async def create_user(create_data: UserCreateWrapper, db: AsyncSession = Depends
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    return UserResponseWrapper(user=format_user_response(user))
+
+
+# ========== Аутентификация ==========
+@router.post(
+    "/users/login",
+    response_model=UserResponseWrapper,
+    status_code=status.HTTP_200_OK,
+    summary="Аутентификация пользователя",
+    tags=["Authentication"],
+    responses={
+        200: {
+            "description": "Успешная аутентификация",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "user": {
+                            "id": 123,
+                            "username": "johndoe",
+                            "email": "john@example.com",
+                            "bio": "Full-stack developer and tech writer",
+                            "image_url": "https://storage.com/avatars/123.jpg",
+                            "created_at": "2024-01-15T10:30:00Z",
+                            "updated_at": "2024-02-20T15:45:00Z"
+                        }
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Неверный email или пароль",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "errors": {
+                            "email": ["is invalid"],
+                            "password": ["is incorrect"]
+                        }
+                    }
+                }
+            }
+        },
+        429: {
+            "description": "Too Many Requests",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Too many failed attempts. Try again in 15 minutes."
+                    }
+                }
+            }
+        }
+    }
+)
+async def login(
+        login_data: LoginRequestWrapper,
+        db: AsyncSession = Depends(get_db)
+):
+    """Аутентификация пользователя"""
+    user_data = login_data.user
+
+    # Находим пользователя по email
+    result = await db.execute(select(User).where(User.email == user_data.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={"errors": {"email": ["is invalid"]}}
+        )
+
+    # Проверяем пароль (временно, пока нет хэширования)
+    if user.password_hash != user_data.password:
+        return JSONResponse(
+            status_code=401,
+            content={"errors": {"password": ["is incorrect"]}}
+        )
 
     return UserResponseWrapper(user=format_user_response(user))
 
@@ -291,7 +372,9 @@ async def update_user(
 @router.get(
     "/stats/user/{username}",
     response_model=UserStats,
+    tags=["Stats"],
     summary="Статистика пользователя",
+    description="Возвращает статистику по пользователю",
     responses={
         200: {
             "description": "Статистика пользователя",
@@ -315,7 +398,10 @@ async def update_user(
         }
     }
 )
-async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
+async def get_user_stats(
+        username: str = Path(..., description="Имя пользователя", examples=["johndoe"]),
+        db: AsyncSession = Depends(get_db)
+):
     """Получить статистику пользователя по username"""
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()

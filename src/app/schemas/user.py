@@ -30,14 +30,27 @@ class UserCreate(UserBase):
 
 
 class UserCreateWrapper(BaseModel):
-    """Обертка для создания пользователя"""
+    """Обертка для создания пользователя (соответствует OpenAPI)"""
     user: UserCreate
 
     model_config = ConfigDict(from_attributes=True)
 
 
+class LoginRequest(BaseModel):
+    """Запрос на аутентификацию"""
+    email: EmailStr = Field(..., description="Email пользователя", examples=["john@example.com"])
+    password: str = Field(..., description="Пароль", examples=["SecurePass123"])
+
+
+class LoginRequestWrapper(BaseModel):
+    """Обертка для логина (соответствует OpenAPI)"""
+    user: LoginRequest
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UserResponse(BaseModel):
-    """Ответ с данными пользователя"""
+    """Ответ с данными пользователя (соответствует OpenAPI)"""
     id: int = Field(..., description="ID пользователя", examples=[123])
     username: str = Field(..., description="Имя пользователя", examples=["john_doe"])
     email: EmailStr = Field(..., description="Email пользователя", examples=["john@example.com"])
@@ -87,14 +100,14 @@ class UserUpdate(BaseModel):
 
 
 class UserUpdateWrapper(BaseModel):
-    """Обертка для обновления пользователя"""
+    """Обертка для обновления пользователя (соответствует OpenAPI)"""
     user: UserUpdate
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class Profile(BaseModel):
-    """Публичный профиль пользователя"""
+    """Публичный профиль пользователя (соответствует OpenAPI)"""
     username: str = Field(..., description="Имя пользователя", examples=["john_doe"])
     bio: Optional[str] = Field(None, description="Информация о пользователе", examples=["Full-stack developer"])
     image_url: Optional[str] = Field(None, description="URL аватара", examples=["https://storage.com/avatars/123.jpg"])
@@ -104,7 +117,7 @@ class Profile(BaseModel):
 
 
 class ProfileResponse(BaseModel):
-    """Обертка для профиля"""
+    """Обертка для профиля (соответствует OpenAPI)"""
     profile: Profile
 
     model_config = ConfigDict(from_attributes=True)

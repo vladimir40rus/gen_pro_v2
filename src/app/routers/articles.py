@@ -123,13 +123,70 @@ def format_article_response(article_data: dict, author_stats: dict = None) -> di
     }
 
 
-# ========== ЭНДПОИНТЫ ==========
+# ========== ЭНДПОИНТЫ СТАТЕЙ ==========
 
 @router.post(
     "",
     response_model=ArticleResponseWrapper,
     status_code=status.HTTP_201_CREATED,
-    summary="Создание новой статьи"
+    summary="Создание новой статьи",
+    responses={
+        201: {
+            "description": "Статья создана",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "article": {
+                            "id": 456,
+                            "slug": "how-to-learn-javascript-in-2024",
+                            "title": "How to Learn JavaScript in 2024",
+                            "description": "A comprehensive guide to learning JavaScript",
+                            "body": "JavaScript is one of the most popular programming languages...",
+                            "author": {
+                                "username": "johndoe",
+                                "bio": "Full-stack developer",
+                                "image_url": "https://storage.com/avatars/123.jpg",
+                                "following": True,
+                                "followers_count": 42,
+                                "following_count": 15,
+                                "articles_count": 7
+                            },
+                            "tags": ["javascript"],
+                            "favorited": True,
+                            "favorites_count": 42,
+                            "comments_count": 15,
+                            "created_at": "2024-02-01T14:20:00Z",
+                            "updated_at": "2024-02-05T09:15:00Z"
+                        }
+                    }
+                }
+            }
+        },
+        401: {"description": "Не аутентифицирован"},
+        422: {
+            "description": "Ошибка валидации",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "errors": {
+                            "slug": ["already exists"],
+                            "title": ["must be at least 3 characters"]
+                        }
+                    }
+                }
+            }
+        },
+        429: {
+            "description": "Rate limit (максимум 10 статей в час)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Rate limit exceeded. Try again later."
+                    }
+                }
+            }
+        }
+    }
 )
 async def create_article(
         create_data: ArticleCreateWrapper,
@@ -137,6 +194,7 @@ async def create_article(
         db: AsyncSession = Depends(get_db)
 ):
     """Создать новую статью"""
+    # TODO Убрать user_id
     article_data = create_data.article
     errors = {}
 
@@ -195,7 +253,44 @@ async def create_article(
     "",
     response_model=ArticlesResponseWrapper,
     summary="Получение списка статей",
-    description="Возвращает список статей с возможностью фильтрации"
+    description="Возвращает список статей с возможностью фильтрации",
+    tags=["Articles", "Feed"],
+    responses={
+        200: {
+            "description": "Список статей",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "articles": [
+                            {
+                                "id": 456,
+                                "slug": "how-to-learn-javascript-in-2024",
+                                "title": "How to Learn JavaScript in 2024",
+                                "description": "A comprehensive guide to learning JavaScript",
+                                "body": "JavaScript is one of the most popular programming languages...",
+                                "author": {
+                                    "username": "johndoe",
+                                    "bio": "Full-stack developer",
+                                    "image_url": "https://storage.com/avatars/123.jpg",
+                                    "following": True,
+                                    "followers_count": 42,
+                                    "following_count": 15,
+                                    "articles_count": 7
+                                },
+                                "tags": ["javascript"],
+                                "favorited": True,
+                                "favorites_count": 42,
+                                "comments_count": 15,
+                                "created_at": "2024-02-01T14:20:00Z",
+                                "updated_at": "2024-02-05T09:15:00Z"
+                            }
+                        ],
+                        "articles_count": 100
+                    }
+                }
+            }
+        }
+    }
 )
 async def list_articles(
         tag: Optional[str] = Query(None, description="Фильтр по тегу", examples=["javascript"]),
@@ -253,7 +348,50 @@ async def list_articles(
 @router.get(
     "/{slug}",
     response_model=ArticleResponseWrapper,
-    summary="Получение статьи по slug"
+    summary="Получение статьи по slug",
+    responses={
+        200: {
+            "description": "Статья найдена",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "article": {
+                            "id": 456,
+                            "slug": "how-to-learn-javascript-in-2024",
+                            "title": "How to Learn JavaScript in 2024",
+                            "description": "A comprehensive guide to learning JavaScript",
+                            "body": "JavaScript is one of the most popular programming languages...",
+                            "author": {
+                                "username": "johndoe",
+                                "bio": "Full-stack developer",
+                                "image_url": "https://storage.com/avatars/123.jpg",
+                                "following": True,
+                                "followers_count": 42,
+                                "following_count": 15,
+                                "articles_count": 7
+                            },
+                            "tags": ["javascript"],
+                            "favorited": True,
+                            "favorites_count": 42,
+                            "comments_count": 15,
+                            "created_at": "2024-02-01T14:20:00Z",
+                            "updated_at": "2024-02-05T09:15:00Z"
+                        }
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Статья не найдена",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Article not found"
+                    }
+                }
+            }
+        }
+    }
 )
 async def get_article(
         slug: str,
@@ -261,6 +399,7 @@ async def get_article(
         db: AsyncSession = Depends(get_db)
 ):
     """Получить статью по slug"""
+    #TODO Убрать User_id
     article_info = await get_article_by_slug(slug, db, user_id)
 
     if not article_info:
@@ -278,7 +417,61 @@ async def get_article(
     "/{slug}",
     response_model=ArticleResponseWrapper,
     summary="Обновление статьи",
-    description="Обновляет существующую статью (только автор)"
+    description="Обновляет существующую статью (только автор)",
+    responses={
+        200: {
+            "description": "Статья обновлена",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "article": {
+                            "id": 456,
+                            "slug": "how-to-learn-javascript-in-2024",
+                            "title": "How to Learn JavaScript in 2024",
+                            "description": "A comprehensive guide to learning JavaScript",
+                            "body": "JavaScript is one of the most popular programming languages...",
+                            "author": {
+                                "username": "johndoe",
+                                "bio": "Full-stack developer",
+                                "image_url": "https://storage.com/avatars/123.jpg",
+                                "following": True,
+                                "followers_count": 42,
+                                "following_count": 15,
+                                "articles_count": 7
+                            },
+                            "tags": ["javascript"],
+                            "favorited": True,
+                            "favorites_count": 42,
+                            "comments_count": 15,
+                            "created_at": "2024-02-01T14:20:00Z",
+                            "updated_at": "2024-02-05T09:15:00Z"
+                        }
+                    }
+                }
+            }
+        },
+        401: {"description": "Не аутентифицирован"},
+        403: {
+            "description": "Нет прав (не автор)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "You don't have permission to edit this article"
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Статья не найдена",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Article not found"
+                    }
+                }
+            }
+        }
+    }
 )
 async def update_article(
         slug: str,
@@ -345,7 +538,13 @@ async def update_article(
     "/{slug}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удаление статьи",
-    description="Удаляет статью и все связанные данные (комментарии, теги, лайки)"
+    description="Удаляет статью и все связанные данные (комментарии, теги, лайки)",
+    responses={
+        204: {"description": "Статья удалена"},
+        401: {"description": "Не аутентифицирован"},
+        403: {"description": "Нет прав (не автор)"},
+        404: {"description": "Статья не найдена"}
+    }
 )
 async def delete_article(
         slug: str,
@@ -380,7 +579,46 @@ async def delete_article(
 @router.get(
     "/feed",
     response_model=ArticlesResponseWrapper,
-    summary="Лента статей"
+    summary="Получение ленты статей",
+    description="Возвращает статьи от авторов, на которых подписан пользователь",
+    tags=["Feed"],
+    responses={
+        200: {
+            "description": "Лента статей",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "articles": [
+                            {
+                                "id": 456,
+                                "slug": "how-to-learn-javascript-in-2024",
+                                "title": "How to Learn JavaScript in 2024",
+                                "description": "A comprehensive guide to learning JavaScript",
+                                "body": "JavaScript is one of the most popular programming languages...",
+                                "author": {
+                                    "username": "johndoe",
+                                    "bio": "Full-stack developer",
+                                    "image_url": "https://storage.com/avatars/123.jpg",
+                                    "following": True,
+                                    "followers_count": 42,
+                                    "following_count": 15,
+                                    "articles_count": 7
+                                },
+                                "tags": ["javascript"],
+                                "favorited": True,
+                                "favorites_count": 42,
+                                "comments_count": 15,
+                                "created_at": "2024-02-01T14:20:00Z",
+                                "updated_at": "2024-02-05T09:15:00Z"
+                            }
+                        ],
+                        "articles_count": 100
+                    }
+                }
+            }
+        },
+        401: {"description": "Не аутентифицирован"}
+    }
 )
 async def get_feed(
         user_id: int = Query(..., description="ID пользователя"),
@@ -390,6 +628,7 @@ async def get_feed(
 ):
     """Получить статьи авторов, на которых подписан пользователь"""
 
+    # Проверяем пользователя
     user = await db.get(User, user_id)
     if not user:
         return JSONResponse(
@@ -397,6 +636,7 @@ async def get_feed(
             content={"error": "Authentication required"}
         )
 
+    # Находим подписки
     from app.models import Follower
     following_result = await db.execute(
         select(Follower.following_id).where(Follower.follower_id == user_id)
@@ -406,16 +646,19 @@ async def get_feed(
     if not following_ids:
         return ArticlesResponseWrapper(articles=[], articles_count=0)
 
+    # Запрос для подсчёта
     count_query = select(func.count()).select_from(Article).where(Article.author_id.in_(following_ids))
     total_count_result = await db.execute(count_query)
     total_count = total_count_result.scalar() or 0
 
+    # Получаем статьи
     query = select(Article).where(Article.author_id.in_(following_ids))
     query = query.order_by(desc(Article.created_at)).offset(offset).limit(limit)
 
     result = await db.execute(query)
     articles = result.scalars().all()
 
+    # Формируем ответ
     response_articles = []
     for article in articles:
         article_info = await get_article_by_slug(article.slug, db, user_id)
@@ -434,7 +677,56 @@ async def get_feed(
     "/search",
     response_model=ArticlesResponseWrapper,
     summary="Поиск статей",
-    description="Полнотекстовый поиск по статьям"
+    description="Полнотекстовый поиск по статьям",
+    responses={
+        200: {
+            "description": "Результаты поиска",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "articles": [
+                            {
+                                "id": 456,
+                                "slug": "how-to-learn-javascript-in-2024",
+                                "title": "How to Learn JavaScript in 2024",
+                                "description": "A comprehensive guide to learning JavaScript",
+                                "body": "JavaScript is one of the most popular programming languages...",
+                                "author": {
+                                    "username": "johndoe",
+                                    "bio": "Full-stack developer",
+                                    "image_url": "https://storage.com/avatars/123.jpg",
+                                    "following": True,
+                                    "followers_count": 42,
+                                    "following_count": 15,
+                                    "articles_count": 7
+                                },
+                                "tags": ["javascript"],
+                                "favorited": True,
+                                "favorites_count": 42,
+                                "comments_count": 15,
+                                "created_at": "2024-02-01T14:20:00Z",
+                                "updated_at": "2024-02-05T09:15:00Z"
+                            }
+                        ],
+                        "articles_count": 100
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Неверный запрос (менее 3 символов)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "errors": {
+                            "q": ["query must be at least 3 characters"]
+                        }
+                    }
+                }
+            }
+        },
+        401: {"description": "Не аутентифицирован"}
+    }
 )
 async def search_articles(
         q: str = Query(..., min_length=3, description="Поисковый запрос (минимум 3 символа)",
