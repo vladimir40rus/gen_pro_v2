@@ -1,27 +1,35 @@
+# src/app/main.py
 import uvicorn
+import logging
 from fastapi import FastAPI
+from app.present.routs import group_router
 
-from app.routers import users, admin, articles, comments, tags, favorites, followers
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Мой проект на фастапи!")
+# Создание приложения FastAPI
+app = FastAPI(
+    title="Blog Platform API",
+    description="RESTful API для блоговой платформы с луковой архитектурой",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
 
+# Подключение всех роутеров
+app.include_router(group_router)
 
-app.include_router(users)
-app.include_router(admin)
-app.include_router(articles)
-app.include_router(comments)
-app.include_router(tags)
-app.include_router(favorites)
-app.include_router(followers)
+# Простой эндпоинт для проверки работоспособности
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "message": "API работает!"}
 
-
-# ========== ЗАПУСК СЕРВЕРА ==========
-if __name__ == "__main__": #Для докер хост используем нули
+if __name__ == "__main__":
     uvicorn.run(
-        "app.main:app",
+        "main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
         log_level="info"
-
     )
