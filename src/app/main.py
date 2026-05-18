@@ -1,4 +1,3 @@
-# src/app/main.py
 import uvicorn
 import logging
 from fastapi import FastAPI

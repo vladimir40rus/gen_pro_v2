@@ -1,3 +1,4 @@
+# src/app/present/routs.py
 from fastapi import APIRouter
 from app.present.api.v1 import (
     users_router,
@@ -6,6 +7,7 @@ from app.present.api.v1 import (
     tags_router,
     favorites_router,
     profiles_router,
+    admin_router,  # ← добавить
 )
 
 group_router = APIRouter()
@@ -16,3 +18,4 @@ group_router.include_router(comments_router, prefix="/api/v1", tags=["Comments"]
 group_router.include_router(tags_router, prefix="/api/v1", tags=["Tags"])
 group_router.include_router(favorites_router, prefix="/api/v1", tags=["Favorites"])
 group_router.include_router(profiles_router, prefix="/api/v1", tags=["Profile"])
+group_router.include_router(admin_router, prefix="/api/v1")  # ← добавить
