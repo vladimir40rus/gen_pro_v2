@@ -1,22 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Path
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra_external.connection_manager.db_connection import get_db_session
 from app.infra_external.models.user_db import UserDB
 from app.infra_external.models.article_db import ArticleDB
-from app.infra_external.models.comment_db import CommentDB
-from app.infra_external.models.favorite_db import FavoriteDB
 from app.infra_external.models.follower_db import FollowerDB
-from app.present.contracts.user_contracts import (
-    UserCreateContract, UserCreateWrapperContract,
-    UserResponseContract, UserResponseWrapperContract,
-    UserUpdateContract, UserUpdateWrapperContract,
-    LoginRequestContract, LoginRequestWrapperContract,
+from app.present.api.v1.contracts.user_contracts import (
+    UserCreateWrapperContract,
+    UserResponseWrapperContract,
+    UserUpdateWrapperContract,
+    LoginRequestWrapperContract,
 )
-from app.present.contracts.error_contracts import ErrorContract
 
 router = APIRouter(tags=["Users", "Authentication"])
 

@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
 
 from app.infra_external.connection_manager.db_connection import get_db_session
 from app.infra_external.models.tag_db import TagDB, article_tag_association
-from app.present.contracts.tag_contracts import TagsResponseWrapperContract
+from app.present.api.v1.contracts.tag_contracts import TagsResponseWrapperContract
 
 router = APIRouter(tags=["Tags"])
 

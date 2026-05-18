@@ -11,12 +11,10 @@ from app.infra_external.models.user_db import UserDB
 from app.infra_external.models.tag_db import TagDB, article_tag_association
 from app.infra_external.models.favorite_db import FavoriteDB
 from app.infra_external.models.comment_db import CommentDB
-from app.present.contracts.article_contracts import (
-    ArticleCreateContract, ArticleCreateWrapperContract,
-    ArticleResponseContract, ArticleResponseWrapperContract,
+from app.present.api.v1.contracts import (
+    ArticleCreateWrapperContract,
+    ArticleResponseWrapperContract,
     ArticlesResponseWrapperContract,
-    ArticleUpdateContract, ArticleUpdateWrapperContract,
-    ProfileContract,
 )
 
 router = APIRouter(tags=["Articles"])

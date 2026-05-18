@@ -1,16 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List
 
 from app.infra_external.connection_manager.db_connection import get_db_session
 from app.infra_external.models.comment_db import CommentDB
 from app.infra_external.models.article_db import ArticleDB
 from app.infra_external.models.user_db import UserDB
-from app.present.contracts.comment_contracts import (
-    CommentCreateContract, CommentCreateWrapperContract,
-    CommentResponseContract, CommentResponseWrapperContract,
+from app.present.api.v1.contracts.comment_contracts import (
+    CommentCreateWrapperContract,
+    CommentResponseWrapperContract,
     CommentsResponseWrapperContract,
 )
 
